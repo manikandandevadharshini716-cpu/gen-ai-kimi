@@ -1,0 +1,812 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Run & Jump</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #1a1a2e;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  overflow: hidden;
+}
+#game-wrapper {
+  width: 100%;
+  max-width: 920px;
+  padding: 10px;
+}
+#game-container {
+  width: 100%;
+  position: relative;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+}
+#gameCanvas {
+  display: block;
+  width: 100%;
+  background: #87CEEB;
+}
+.game-screen {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+.game-btn {
+  padding: 14px 32px;
+  border: 2px solid rgba(255,255,255,0.8);
+  background: rgba(255,255,255,0.15);
+  color: white;
+  font-size: 17px;
+  font-weight: 600;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: inherit;
+  min-width: 200px;
+}
+.game-btn:hover {
+  background: rgba(255,255,255,0.3);
+  transform: translateY(-2px);
+}
+.game-btn.primary {
+  background: rgba(255,255,255,0.9);
+  color: #333;
+  border-color: white;
+}
+.game-btn.primary:hover {
+  background: white;
+}
+.game-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none;
+}
+.level-btn {
+  width: 90px;
+  height: 90px;
+  border-radius: 18px;
+  font-size: 26px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 4px;
+  min-width: unset;
+}
+.level-btn .stars { font-size: 13px; }
+#hud {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  display: none;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 18px;
+  pointer-events: none;
+}
+#hud > div { display: flex; gap: 14px; align-items: center; }
+.hud-badge {
+  background: rgba(0,0,0,0.55);
+  color: white;
+  padding: 7px 16px;
+  border-radius: 20px;
+  font-weight: 700;
+  font-size: 15px;
+  backdrop-filter: blur(4px);
+}
+#hud-score { color: #FFD700; }
+#hud-lives { color: #ff6b6b; }
+#pause-btn {
+  pointer-events: auto;
+  background: rgba(0,0,0,0.55);
+  border: none;
+  color: white;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: 700;
+  backdrop-filter: blur(4px);
+}
+</style>
+</head>
+<body>
+<div id="game-wrapper">
+<div id="game-container">
+  <canvas id="gameCanvas" width="900" height="520"></canvas>
+
+  <!-- Main Menu -->
+  <div id="screen-menu" class="game-screen" style="background: linear-gradient(180deg,#4facfe 0%,#00f2fe 100%);color:white;">
+    <h1 style="font-size:56px;font-weight:800;margin:0 0 10px;text-shadow:0 3px 8px rgba(0,0,0,0.3);letter-spacing:2px;">Run & Jump</h1>
+    <p style="font-size:19px;margin:0 0 36px;opacity:0.9;">Jump, collect coins, survive!</p>
+    <div style="display:flex;flex-direction:column;gap:14px;width:240px;">
+      <button onclick="game.startGame()" class="game-btn primary">Start Game</button>
+      <button onclick="game.showScreen('levelSelect')" class="game-btn">Level Select</button>
+      <button onclick="game.showScreen('instructions')" class="game-btn">Instructions</button>
+    </div>
+    <div id="menu-stats" style="margin-top:28px;font-size:14px;opacity:0.8;"></div>
+  </div>
+
+  <!-- Instructions -->
+  <div id="screen-instructions" class="game-screen" style="display:none;background: linear-gradient(180deg,#667eea 0%,#764ba2 100%);color:white;padding:28px;">
+    <h2 style="font-size:34px;margin:0 0 24px;">How to Play</h2>
+    <div style="background:rgba(255,255,255,0.15);border-radius:14px;padding:24px 32px;text-align:left;max-width:420px;line-height:2;font-size:17px;">
+      <p><strong>SPACE</strong> or <strong>Arrow Up</strong> = Jump</p>
+      <p><strong>Collect coins</strong> to increase your score (+10 each)</p>
+      <p><strong>Avoid obstacles</strong> to save your lives</p>
+      <p><strong>Reach the finish line</strong> to complete the level</p>
+      <p><strong>ESC</strong> = Pause game</p>
+      <p><strong>Tap screen</strong> = Jump on mobile</p>
+    </div>
+    <button onclick="game.showScreen('menu')" class="game-btn" style="margin-top:24px;">Back to Menu</button>
+  </div>
+
+  <!-- Level Select -->
+  <div id="screen-levelSelect" class="game-screen" style="display:none;background: linear-gradient(180deg,#f093fb 0%,#f5576c 100%);color:white;padding:28px;">
+    <h2 style="font-size:34px;margin:0 0 28px;">Select Level</h2>
+    <div id="level-buttons" style="display:flex;gap:18px;flex-wrap:wrap;justify-content:center;"></div>
+    <button onclick="game.showScreen('menu')" class="game-btn" style="margin-top:28px;">Back to Menu</button>
+  </div>
+
+  <!-- HUD -->
+  <div id="hud">
+    <div>
+      <div id="hud-score" class="hud-badge">Score: 0</div>
+      <div id="hud-lives" class="hud-badge">Lives: 3</div>
+    </div>
+    <div style="display:flex;gap:12px;align-items:center;">
+      <div id="hud-level" class="hud-badge">Level 1</div>
+      <button id="pause-btn" onclick="game.pause()">II</button>
+    </div>
+  </div>
+
+  <!-- Pause Menu -->
+  <div id="screen-paused" class="game-screen" style="display:none;background:rgba(0,0,0,0.65);color:white;">
+    <h2 style="font-size:40px;margin:0 0 28px;">Paused</h2>
+    <div style="display:flex;flex-direction:column;gap:14px;width:220px;">
+      <button onclick="game.resume()" class="game-btn primary">Resume</button>
+      <button onclick="game.restartLevel()" class="game-btn">Restart Level</button>
+      <button onclick="game.showScreen('menu')" class="game-btn">Main Menu</button>
+    </div>
+  </div>
+
+  <!-- Game Over -->
+  <div id="screen-gameOver" class="game-screen" style="display:none;background:rgba(0,0,0,0.78);color:white;">
+    <h2 style="font-size:48px;margin:0 0 10px;color:#ff6b6b;">Game Over</h2>
+    <p id="go-score" style="font-size:24px;margin:0 0 28px;">Score: 0</p>
+    <div style="display:flex;flex-direction:column;gap:14px;width:220px;">
+      <button onclick="game.restartLevel()" class="game-btn primary">Try Again</button>
+      <button onclick="game.showScreen('menu')" class="game-btn">Main Menu</button>
+    </div>
+  </div>
+
+  <!-- Level Complete -->
+  <div id="screen-levelComplete" class="game-screen" style="display:none;background:rgba(0,0,0,0.65);color:white;">
+    <h2 style="font-size:48px;margin:0 0 10px;color:#4ade80;">Level Complete!</h2>
+    <p id="lc-score" style="font-size:24px;margin:0 0 6px;">Score: 0</p>
+    <p id="lc-stars" style="font-size:32px;margin:0 0 28px;"></p>
+    <div style="display:flex;flex-direction:column;gap:14px;width:220px;">
+      <button id="btn-next" onclick="game.nextLevel()" class="game-btn primary">Next Level</button>
+      <button onclick="game.restartLevel()" class="game-btn">Replay Level</button>
+      <button onclick="game.showScreen('menu')" class="game-btn">Main Menu</button>
+    </div>
+  </div>
+
+  <!-- Final Screen -->
+  <div id="screen-final" class="game-screen" style="display:none;background: linear-gradient(180deg,#ffd700 0%,#ff8c00 100%);color:white;padding:28px;">
+    <h2 style="font-size:40px;margin:0 0 14px;text-shadow:0 2px 6px rgba(0,0,0,0.3);">Congratulations!</h2>
+    <p style="font-size:22px;margin:0 0 10px;">You Completed Run & Jump!</p>
+    <p id="final-score" style="font-size:28px;margin:0 0 28px;font-weight:700;">Final Score: 0</p>
+    <div style="display:flex;flex-direction:column;gap:14px;width:220px;">
+      <button onclick="game.resetProgress()" class="game-btn primary">Play Again</button>
+      <button onclick="game.showScreen('menu')" class="game-btn">Main Menu</button>
+    </div>
+  </div>
+</div>
+</div>
+
+<script>
+(function() {
+  const canvas = document.getElementById('gameCanvas');
+  const ctx = canvas.getContext('2d');
+  const W = 900, H = 520;
+
+  const storage = {
+    get: (k, def) => { try { return JSON.parse(localStorage.getItem('runjump_' + k)) ?? def; } catch(e) { return def; } },
+    set: (k, v) => { try { localStorage.setItem('runjump_' + k, JSON.stringify(v)); } catch(e) {} }
+  };
+
+  const state = {
+    screen: 'menu',
+    level: 1,
+    score: 0,
+    lives: 3,
+    unlocked: storage.get('unlocked', [true, false, false, false, false]),
+    highScores: storage.get('highScores', [0,0,0,0,0]),
+    totalScore: storage.get('totalScore', 0),
+    paused: false,
+    running: false,
+    frame: 0,
+    camera: 0,
+    invincible: 0,
+    particles: [],
+    clouds: [],
+    trees: [],
+    birds: []
+  };
+
+  const player = {
+    x: 150, y: 0, w: 36, h: 48,
+    vx: 0, vy: 0,
+    onGround: false,
+    animFrame: 0,
+    facing: 1
+  };
+
+  let platforms = [], obstacles = [], coins = [], finishX = 0, groundY = 440;
+  let levelLength = 2000;
+  let runSpeed = 4;
+
+  const keys = {};
+  window.addEventListener('keydown', e => {
+    keys[e.code] = true;
+    if ((e.code === 'Space' || e.code === 'ArrowUp') && state.screen === 'playing' && !state.paused) {
+      e.preventDefault();
+      if (player.onGround) {
+        player.vy = -14;
+        player.onGround = false;
+        createParticles(player.x + player.w/2, player.y + player.h, 6, '#fff');
+      }
+    }
+    if (e.code === 'Escape' && state.screen === 'playing') {
+      state.paused ? game.resume() : game.pause();
+    }
+  });
+  window.addEventListener('keyup', e => { keys[e.code] = false; });
+
+  canvas.addEventListener('touchstart', e => {
+    e.preventDefault();
+    if (state.screen === 'playing' && !state.paused && player.onGround) {
+      player.vy = -14;
+      player.onGround = false;
+      createParticles(player.x + player.w/2, player.y + player.h, 6, '#fff');
+    }
+  }, {passive:false});
+
+  function createParticles(x, y, count, color) {
+    for (let i = 0; i < count; i++) {
+      state.particles.push({
+        x, y,
+        vx: (Math.random() - 0.5) * 7,
+        vy: (Math.random() - 0.5) * 7 - 3,
+        life: 1,
+        color,
+        size: Math.random() * 5 + 2
+      });
+    }
+  }
+
+  function generateLevel(lvl) {
+    platforms = [];
+    obstacles = [];
+    coins = [];
+    state.particles = [];
+    state.clouds = [];
+    state.trees = [];
+    state.birds = [];
+
+    const configs = [
+      { len: 2800, speed: 3.5, gapChance: 0, obsDensity: 0.007, coinDensity: 0.016 },
+      { len: 3800, speed: 4.3, gapChance: 0.06, obsDensity: 0.011, coinDensity: 0.013 },
+      { len: 4800, speed: 5.0, gapChance: 0.13, obsDensity: 0.014, coinDensity: 0.011 },
+      { len: 5800, speed: 5.6, gapChance: 0.19, obsDensity: 0.019, coinDensity: 0.009 },
+      { len: 6800, speed: 6.3, gapChance: 0.24, obsDensity: 0.024, coinDensity: 0.008 }
+    ];
+    const cfg = configs[lvl - 1] || configs[0];
+    levelLength = cfg.len;
+    runSpeed = cfg.speed;
+    groundY = 440;
+
+    let x = 0;
+    while (x < levelLength) {
+      const segLen = 220 + Math.random() * 320;
+      const isGap = Math.random() < cfg.gapChance && x > 500;
+      if (!isGap) {
+        platforms.push({ x, y: groundY, w: segLen, h: 80 });
+        if (x > 400) {
+          const obsCount = Math.floor(segLen * cfg.obsDensity);
+          for (let i = 0; i < obsCount; i++) {
+            const ox = x + 60 + Math.random() * (segLen - 120);
+            const type = Math.random() > 0.5 ? 'spike' : 'rock';
+            obstacles.push({ x: ox, y: type === 'spike' ? groundY - 32 : groundY - 30, w: type === 'spike' ? 32 : 34, h: type === 'spike' ? 32 : 30, type });
+          }
+        }
+        const coinCount = Math.floor(segLen * cfg.coinDensity);
+        for (let i = 0; i < coinCount; i++) {
+          const cx = x + 50 + Math.random() * (segLen - 100);
+          const cy = groundY - 65 - Math.random() * 110;
+          coins.push({ x: cx, y: cy, r: 13, collected: false, spin: Math.random() * Math.PI });
+        }
+      }
+      x += segLen + (isGap ? 90 + Math.random() * 70 : 0);
+    }
+
+    platforms.push({ x: levelLength, y: groundY, w: 500, h: 80 });
+    finishX = levelLength + 120;
+
+    for (let i = 0; i < 22; i++) {
+      state.clouds.push({ x: Math.random() * (levelLength + 1200), y: 35 + Math.random() * 130, scale: 0.5 + Math.random() * 1.2, speed: 0.2 + Math.random() * 0.35 });
+    }
+    for (let i = 0; i < 45; i++) {
+      state.trees.push({ x: Math.random() * (levelLength + 600), y: groundY, scale: 0.7 + Math.random() * 0.6, type: Math.random() > 0.5 ? 0 : 1 });
+    }
+    for (let i = 0; i < 8; i++) {
+      state.birds.push({ x: Math.random() * levelLength, y: 60 + Math.random() * 100, speed: 1 + Math.random() * 1.5, offset: Math.random() * Math.PI * 2 });
+    }
+
+    player.x = 150;
+    player.y = groundY - player.h;
+    player.vx = 0;
+    player.vy = 0;
+    player.onGround = true;
+    state.camera = 0;
+    state.frame = 0;
+    state.invincible = 0;
+  }
+
+  function update() {
+    if (!state.running || state.paused) return;
+    state.frame++;
+
+    player.x += runSpeed;
+    state.camera = player.x - 200;
+
+    player.vy += 0.58;
+    player.y += player.vy;
+
+    player.onGround = false;
+    for (const plat of platforms) {
+      if (player.x + player.w > plat.x && player.x < plat.x + plat.w) {
+        if (player.y + player.h >= plat.y && player.y + player.h <= plat.y + 35 && player.vy >= 0) {
+          player.y = plat.y - player.h;
+          player.vy = 0;
+          player.onGround = true;
+        }
+      }
+    }
+
+    if (player.y > H + 120) {
+      loseLife();
+      return;
+    }
+
+    if (state.invincible > 0) state.invincible--;
+
+    if (state.invincible <= 0) {
+      for (const obs of obstacles) {
+        if (rectCollide(player, obs)) {
+          loseLife();
+          break;
+        }
+      }
+    }
+
+    for (const coin of coins) {
+      if (!coin.collected) {
+        const dx = (player.x + player.w/2) - coin.x;
+        const dy = (player.y + player.h/2) - coin.y;
+        if (Math.sqrt(dx*dx + dy*dy) < coin.r + player.w/2 + 2) {
+          coin.collected = true;
+          state.score += 10;
+          createParticles(coin.x, coin.y, 10, '#FFD700');
+          updateHUD();
+        }
+      }
+      coin.spin += 0.09;
+    }
+
+    if (player.x >= finishX) {
+      levelComplete();
+      return;
+    }
+
+    for (let i = state.particles.length - 1; i >= 0; i--) {
+      const p = state.particles[i];
+      p.x += p.vx;
+      p.y += p.vy;
+      p.vy += 0.18;
+      p.life -= 0.025;
+      if (p.life <= 0) state.particles.splice(i, 1);
+    }
+
+    for (const b of state.birds) {
+      b.x += b.speed;
+      if (b.x > levelLength + 500) b.x = -100;
+    }
+
+    if (player.onGround) player.animFrame += 0.22;
+  }
+
+  function rectCollide(a, b) {
+    const shrink = 6;
+    return (a.x + shrink) < (b.x + b.w - shrink) && (a.x + a.w - shrink) > (b.x + shrink) &&
+           (a.y + shrink) < (b.y + b.h) && (a.y + a.h) > (b.y + shrink);
+  }
+
+  function loseLife() {
+    state.lives--;
+    createParticles(player.x + player.w/2, player.y + player.h/2, 18, '#ff4444');
+    updateHUD();
+    if (state.lives <= 0) {
+      gameOver();
+    } else {
+      state.invincible = 100;
+      let spawnX = 150;
+      for (const plat of platforms) {
+        if (plat.x + plat.w < player.x && plat.x + plat.w > spawnX) {
+          spawnX = plat.x + 30;
+        }
+      }
+      player.x = spawnX;
+      player.y = groundY - 200;
+      player.vy = 0;
+    }
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    const cam = state.camera;
+
+    const skyGrad = ctx.createLinearGradient(0, 0, 0, H);
+    skyGrad.addColorStop(0, '#4facfe');
+    skyGrad.addColorStop(1, '#00f2fe');
+    ctx.fillStyle = skyGrad;
+    ctx.fillRect(0, 0, W, H);
+
+    ctx.fillStyle = '#FFD700';
+    ctx.beginPath();
+    ctx.arc(820 - cam * 0.015, 55, 32, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255,215,0,0.25)';
+    ctx.beginPath();
+    ctx.arc(820 - cam * 0.015, 55, 48, 0, Math.PI * 2);
+    ctx.fill();
+
+    for (const c of state.clouds) {
+      const cx = c.x - cam * 0.25;
+      if (cx < -120 || cx > W + 120) continue;
+      ctx.fillStyle = 'rgba(255,255,255,0.85)';
+      ctx.beginPath();
+      ctx.arc(cx, c.y, 26 * c.scale, 0, Math.PI * 2);
+      ctx.arc(cx + 22 * c.scale, c.y - 10 * c.scale, 32 * c.scale, 0, Math.PI * 2);
+      ctx.arc(cx + 48 * c.scale, c.y, 24 * c.scale, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.fillStyle = '#2d8a4e';
+    ctx.beginPath();
+    ctx.moveTo(0, H);
+    for (let x = 0; x <= W; x += 12) {
+      const wx = x + cam * 0.08;
+      ctx.lineTo(x, 360 + Math.sin(wx * 0.0045) * 35 + Math.sin(wx * 0.011) * 18);
+    }
+    ctx.lineTo(W, H);
+    ctx.fill();
+
+    ctx.fillStyle = '#3cb371';
+    ctx.beginPath();
+    ctx.moveTo(0, H);
+    for (let x = 0; x <= W; x += 12) {
+      const wx = x + cam * 0.15;
+      ctx.lineTo(x, 390 + Math.sin(wx * 0.007) * 28 + Math.sin(wx * 0.014) * 12);
+    }
+    ctx.lineTo(W, H);
+    ctx.fill();
+
+    for (const t of state.trees) {
+      const tx = t.x - cam;
+      if (tx < -60 || tx > W + 60) continue;
+      const ty = t.y;
+      ctx.fillStyle = '#8B4513';
+      ctx.fillRect(tx + 8 * t.scale, ty - 42 * t.scale, 10 * t.scale, 42 * t.scale);
+      ctx.fillStyle = t.type === 0 ? '#228B22' : '#32CD32';
+      ctx.beginPath();
+      ctx.arc(tx + 13 * t.scale, ty - 52 * t.scale, 24 * t.scale, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(tx + 4 * t.scale, ty - 42 * t.scale, 16 * t.scale, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(tx + 24 * t.scale, ty - 44 * t.scale, 17 * t.scale, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    for (const b of state.birds) {
+      const bx = b.x - cam;
+      const by = b.y + Math.sin(state.frame * 0.05 + b.offset) * 8;
+      if (bx < -30 || bx > W + 30) continue;
+      ctx.fillStyle = '#333';
+      ctx.beginPath();
+      ctx.moveTo(bx, by);
+      ctx.lineTo(bx - 10, by - 5);
+      ctx.lineTo(bx - 4, by + 2);
+      ctx.lineTo(bx + 4, by + 2);
+      ctx.lineTo(bx + 10, by - 5);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    for (const plat of platforms) {
+      const px = plat.x - cam;
+      if (px + plat.w < -60 || px > W + 60) continue;
+      ctx.fillStyle = '#4ade80';
+      ctx.fillRect(px, plat.y, plat.w, 14);
+      ctx.fillStyle = '#8B4513';
+      ctx.fillRect(px, plat.y + 14, plat.w, plat.h - 14);
+      ctx.fillStyle = '#A0522D';
+      for (let i = 0; i < plat.w; i += 45) {
+        ctx.fillRect(px + i, plat.y + 22, 22, 4);
+        ctx.fillRect(px + i + 12, plat.y + 38, 16, 3);
+      }
+    }
+
+    for (const obs of obstacles) {
+      const ox = obs.x - cam;
+      if (ox + obs.w < -60 || ox > W + 60) continue;
+      if (obs.type === 'spike') {
+        ctx.fillStyle = '#555';
+        ctx.beginPath();
+        ctx.moveTo(ox, obs.y + obs.h);
+        ctx.lineTo(ox + obs.w/2, obs.y);
+        ctx.lineTo(ox + obs.w, obs.y + obs.h);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = '#777';
+        ctx.beginPath();
+        ctx.moveTo(ox + 5, obs.y + obs.h);
+        ctx.lineTo(ox + obs.w/2, obs.y + 8);
+        ctx.lineTo(ox + obs.w - 5, obs.y + obs.h);
+        ctx.closePath();
+        ctx.fill();
+      } else {
+        ctx.fillStyle = '#666';
+        ctx.beginPath();
+        ctx.arc(ox + obs.w/2, obs.y + obs.h/2, obs.w/2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#888';
+        ctx.beginPath();
+        ctx.arc(ox + obs.w/2 - 4, obs.y + obs.h/2 - 4, obs.w/2.8, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#aaa';
+        ctx.beginPath();
+        ctx.arc(ox + obs.w/2 + 3, obs.y + obs.h/2 + 2, obs.w/5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    for (const coin of coins) {
+      if (coin.collected) continue;
+      const cx = coin.x - cam;
+      if (cx + coin.r < -25 || cx - coin.r > W + 25) continue;
+      const scale = Math.abs(Math.cos(coin.spin));
+      ctx.save();
+      ctx.translate(cx, coin.y);
+      ctx.scale(scale, 1);
+      ctx.fillStyle = '#FFD700';
+      ctx.beginPath();
+      ctx.arc(0, 0, coin.r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#DAA520';
+      ctx.lineWidth = 2.5;
+      ctx.stroke();
+      ctx.fillStyle = '#B8860B';
+      ctx.font = 'bold 15px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('$', 0, 5);
+      ctx.restore();
+    }
+
+    const fx = finishX - cam;
+    if (fx > -120 && fx < W + 120) {
+      ctx.fillStyle = '#C0C0C0';
+      ctx.fillRect(fx, groundY - 130, 8, 130);
+      ctx.fillStyle = '#ff4444';
+      ctx.beginPath();
+      ctx.moveTo(fx + 8, groundY - 130);
+      ctx.lineTo(fx + 65, groundY - 113);
+      ctx.lineTo(fx + 8, groundY - 96);
+      ctx.closePath();
+      ctx.fill();
+      for (let i = 0; i < 5; i++) {
+        for (let j = 0; j < 2; j++) {
+          ctx.fillStyle = (i + j) % 2 === 0 ? '#fff' : '#222';
+          ctx.fillRect(fx + i * 14, groundY - 4 + j * 14, 14, 14);
+        }
+      }
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 16px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('FINISH', fx + 35, groundY - 140);
+    }
+
+    const px = player.x - cam;
+    const py = player.y;
+    const flash = state.invincible > 0 && Math.floor(state.invincible / 4) % 2 === 0;
+    if (!flash) {
+      ctx.fillStyle = '#3b82f6';
+      ctx.fillRect(px + 6, py + 16, 24, 22);
+      ctx.fillStyle = '#fca5a5';
+      ctx.beginPath();
+      ctx.arc(px + 18, py + 12, 12, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#000';
+      ctx.beginPath();
+      ctx.arc(px + 22, py + 10, 2.8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#1e40af';
+      const legOffset = player.onGround ? Math.sin(player.animFrame) * 9 : 0;
+      ctx.fillRect(px + 8, py + 38, 8, 10 + legOffset);
+      ctx.fillRect(px + 20, py + 38, 8, 10 - legOffset);
+      ctx.fillStyle = '#fca5a5';
+      const armOffset = player.onGround ? Math.cos(player.animFrame) * 7 : -5;
+      ctx.fillRect(px + 26, py + 18 + armOffset, 6, 15);
+      ctx.fillStyle = '#5c3a21';
+      ctx.beginPath();
+      ctx.arc(px + 18, py + 5, 9, Math.PI, 0);
+      ctx.fill();
+    }
+
+    for (const p of state.particles) {
+      ctx.globalAlpha = p.life;
+      ctx.fillStyle = p.color;
+      ctx.beginPath();
+      ctx.arc(p.x - cam, p.y, p.size, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    const progress = Math.min(1, player.x / finishX);
+    ctx.fillStyle = 'rgba(0,0,0,0.45)';
+    ctx.fillRect(W/2 - 110, 12, 220, 10);
+    ctx.fillStyle = '#4ade80';
+    ctx.fillRect(W/2 - 110, 12, 220 * progress, 10);
+    ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(W/2 - 110, 12, 220, 10);
+  }
+
+  function updateHUD() {
+    document.getElementById('hud-score').textContent = 'Score: ' + state.score;
+    document.getElementById('hud-lives').textContent = 'Lives: ' + '❤'.repeat(state.lives);
+    document.getElementById('hud-level').textContent = 'Level ' + state.level;
+  }
+
+  function levelComplete() {
+    state.running = false;
+    state.screen = 'levelComplete';
+    let stars = 1;
+    if (state.lives >= 2) stars = 2;
+    if (state.lives === 3) stars = 3;
+    if (state.level < 5) state.unlocked[state.level] = true;
+    if (state.score > state.highScores[state.level - 1]) state.highScores[state.level - 1] = state.score;
+    state.totalScore += state.score;
+    storage.set('unlocked', state.unlocked);
+    storage.set('highScores', state.highScores);
+    storage.set('totalScore', state.totalScore);
+    document.getElementById('lc-score').textContent = 'Score: ' + state.score;
+    document.getElementById('lc-stars').textContent = '⭐'.repeat(stars);
+    document.getElementById('btn-next').style.display = state.level >= 5 ? 'none' : 'block';
+    document.getElementById('hud').style.display = 'none';
+    document.getElementById('screen-levelComplete').style.display = 'flex';
+    if (state.level >= 5) {
+      setTimeout(() => {
+        document.getElementById('screen-levelComplete').style.display = 'none';
+        game.showScreen('final');
+      }, 2500);
+    }
+  }
+
+  function gameOver() {
+    state.running = false;
+    state.screen = 'gameOver';
+    document.getElementById('go-score').textContent = 'Score: ' + state.score;
+    document.getElementById('hud').style.display = 'none';
+    document.getElementById('screen-gameOver').style.display = 'flex';
+  }
+
+  function loop() {
+    update();
+    draw();
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+
+  window.game = {
+    showScreen: function(name) {
+      document.querySelectorAll('.game-screen').forEach(s => s.style.display = 'none');
+      document.getElementById('hud').style.display = 'none';
+      state.screen = name;
+      state.running = false;
+      state.paused = false;
+      if (name === 'menu') {
+        document.getElementById('screen-menu').style.display = 'flex';
+        const stats = document.getElementById('menu-stats');
+        stats.innerHTML = 'High score: ' + Math.max(...state.highScores) + ' | Total: ' + state.totalScore;
+      } else if (name === 'instructions') {
+        document.getElementById('screen-instructions').style.display = 'flex';
+      } else if (name === 'levelSelect') {
+        document.getElementById('screen-levelSelect').style.display = 'flex';
+        this.renderLevelButtons();
+      } else if (name === 'final') {
+        document.getElementById('final-score').textContent = 'Final Score: ' + state.totalScore;
+        document.getElementById('screen-final').style.display = 'flex';
+      }
+    },
+    renderLevelButtons: function() {
+      const container = document.getElementById('level-buttons');
+      container.innerHTML = '';
+      for (let i = 1; i <= 5; i++) {
+        const unlocked = state.unlocked[i - 1];
+        const btn = document.createElement('button');
+        btn.className = 'game-btn level-btn';
+        btn.disabled = !unlocked;
+        const stars = state.highScores[i - 1] > 0 ? (state.highScores[i - 1] >= 250 ? 3 : state.highScores[i - 1] >= 150 ? 2 : 1) : 0;
+        btn.innerHTML = '<div>' + i + '</div>' + (unlocked ? '<div class="stars">' + (stars > 0 ? '⭐'.repeat(stars) : '') + '</div>' : '<div class="stars">🔒</div>');
+        if (unlocked) btn.onclick = () => this.startLevel(i);
+        container.appendChild(btn);
+      }
+    },
+    startGame: function() { this.startLevel(1); },
+    startLevel: function(lvl) {
+      state.level = lvl;
+      state.score = 0;
+      state.lives = 3;
+      state.paused = false;
+      state.screen = 'playing';
+      state.running = true;
+      document.querySelectorAll('.game-screen').forEach(s => s.style.display = 'none');
+      document.getElementById('hud').style.display = 'flex';
+      updateHUD();
+      generateLevel(lvl);
+    },
+    pause: function() {
+      if (state.screen !== 'playing') return;
+      state.paused = true;
+      document.getElementById('screen-paused').style.display = 'flex';
+    },
+    resume: function() {
+      state.paused = false;
+      document.getElementById('screen-paused').style.display = 'none';
+    },
+    restartLevel: function() { this.startLevel(state.level); },
+    nextLevel: function() { if (state.level < 5) this.startLevel(state.level + 1); },
+    resetProgress: function() {
+      state.unlocked = [true, false, false, false, false];
+      state.highScores = [0, 0, 0, 0, 0];
+      state.totalScore = 0;
+      storage.set('unlocked', state.unlocked);
+      storage.set('highScores', state.highScores);
+      storage.set('totalScore', 0);
+      this.startLevel(1);
+    }
+  };
+
+  game.showScreen('menu');
+})();
+</script>
+</body>
+</html>
